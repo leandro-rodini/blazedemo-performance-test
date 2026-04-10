@@ -1,0 +1,243 @@
+name: Performance Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - "scripts/**"
+      - "test-plans/**"
+      - "env/**"
+      - "data/**"
+      - "docs/**"
+      - ".github/workflows/performance.yml"
+      - "README.md"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  performance-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [load, spike]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install JMeter 5.6.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          JMETER_VERSION=5.6.3
+          curl -fsSL "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz" -o jmeter.tgz
+          tar -xzf jmeter.tgz
+          echo "${GITHUB_WORKSPACE}/apache-jmeter-${JMETER_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Ensure jq is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Run scenario
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/run.sh
+          ./scripts/run.sh dev "${{ matrix.scenario }}"
+
+      - name: Evaluate acceptance criteria
+        id: evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          THROUGHPUT=$(jq -r '.Total.throughput' reports/dashboard/statistics.json)
+          P90_MS=$(jq -r '.Total.pct1ResTime' reports/dashboard/statistics.json)
+          ERROR_PCT=$(jq -r '.Total.errorPct' reports/dashboard/statistics.json)
+
+          STATUS="FAILED"
+          if awk "BEGIN { exit !($THROUGHPUT >= 250 && $P90_MS < 2000) }"; then
+            STATUS="PASSED"
+          fi
+
+          echo "throughput=$THROUGHPUT" >> "$GITHUB_OUTPUT"
+          echo "p90_ms=$P90_MS" >> "$GITHUB_OUTPUT"
+          echo "error_pct=$ERROR_PCT" >> "$GITHUB_OUTPUT"
+          echo "criteria_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          cat > "metrics-${{ matrix.scenario }}.json" <<EOF
+          {
+            "scenario": "${{ matrix.scenario }}",
+            "throughput": $THROUGHPUT,
+            "p90_ms": $P90_MS,
+            "error_pct": $ERROR_PCT,
+            "status": "$STATUS"
+          }
+          EOF
+
+          {
+            echo "## Scenario Summary - ${{ matrix.scenario }}"
+            echo ""
+            echo "- Throughput (req/s): $THROUGHPUT"
+            echo "- p90 (ms): $P90_MS"
+            echo "- Error (%): $ERROR_PCT"
+            echo "- Acceptance Criteria: $STATUS"
+            echo ""
+            echo "Criteria: throughput >= 250 req/s and p90 < 2000 ms"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scenario artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-report-${{ matrix.scenario }}
+          path: |
+            reports/dashboard
+            results/results.jtl
+
+      - name: Upload scenario metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrics-${{ matrix.scenario }}
+          path: metrics-${{ matrix.scenario }}.json
+
+      - name: Fail job when criteria is not met
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.evaluate.outputs.criteria_status }}" != "PASSED" ]; then
+            echo "Acceptance criteria not met for scenario ${{ matrix.scenario }}." >&2
+            exit 1
+          fi
+
+  performance-comparison:
+    runs-on: ubuntu-latest
+    needs: performance-matrix
+    if: always()
+
+    steps:
+      - name: Download metrics artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: metrics-*
+          path: metrics
+          merge-multiple: true
+
+      - name: Build comparison summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Scenario Comparison"
+            echo ""
+            echo "| Scenario | Throughput (req/s) | p90 (ms) | Error (%) | Status |"
+            echo "|---|---:|---:|---:|---|"
+            for file in metrics/*.json; do
+              SCENARIO=$(jq -r '.scenario' "$file")
+              THROUGHPUT=$(jq -r '.throughput' "$file")
+              P90_MS=$(jq -r '.p90_ms' "$file")
+              ERROR_PCT=$(jq -r '.error_pct' "$file")
+              STATUS=$(jq -r '.status' "$file")
+              echo "| $SCENARIO | $THROUGHPUT | $P90_MS | $ERROR_PCT | $STATUS |"
+            done
+            echo ""
+            echo "Criteria: throughput >= 250 req/s and p90 < 2000 ms"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  performance-pages:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: performance-matrix
+
+    steps:
+      - name: Download load artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jmeter-report-load
+          path: tmp/load
+
+      - name: Download spike artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jmeter-report-spike
+          path: tmp/spike
+
+      - name: Prepare Pages content
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/pages/load reports/pages/spike
+          cp -R tmp/load/reports/dashboard/. reports/pages/load/
+          cp -R tmp/spike/reports/dashboard/. reports/pages/spike/
+
+      - name: Create Pages index
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > reports/pages/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>BlazeDemo Performance Reports</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              h1 { margin-bottom: 8px; }
+              ul { line-height: 2; }
+            </style>
+          </head>
+          <body>
+            <h1>BlazeDemo Performance Reports</h1>
+            <p>Select the dashboard:</p>
+            <ul>
+              <li><a href="./load/index.html">Load Scenario Dashboard</a></li>
+              <li><a href="./spike/index.html">Spike Scenario Dashboard</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        if: always()
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports/pages
+
+  deploy-pages:
+    if: always()
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: performance-pages
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

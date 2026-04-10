@@ -1,0 +1,21 @@
+# Build and execution artifacts (JMeter)
+/results/*.jtl
+/results/*.log
+/reports/dashboard/
+/report/
+/results.jtl
+*.jtl
+*.log
+
+# Optional local output folders
+/tmp/
+/output/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
