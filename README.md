@@ -1,38 +1,45 @@
-# Desafio Tecnico - Performance BlazeDemo
+# Desafio Técnico - Performance BlazeDemo
 
-Repositorio com automacao de teste de performance para o fluxo de compra de passagem no https://www.blazedemo.com, utilizando Apache JMeter.
+Repositório com automação de teste de performance para o fluxo de compra de passagem no https://www.blazedemo.com, utilizando Apache JMeter.
+
+
+# Relatório público (GitHub Pages)
+
+### Acesse o relatório público no GitHub Pages.
+
+- URL `https://leandro-rodini.github.io/blazedemo-performance-test/`
 
 ## Atendimento ao Enunciado
 
 - Ferramenta escolhida: Apache JMeter.
-- Cenario implementado: compra de passagem com sucesso.
+- Cenário implementado: compra de passagem com sucesso.
 - Testes implementados: carga (`BlazeDemo_Load.jmx`) e pico (`BlazeDemo_Spike.jmx`).
-- Evidencia anexada no repositorio: resultado bruto (`results/results.jtl`) e consolidacao de metricas no README.
-- Conclusao tecnica documentada: criterio de aceitacao nao foi totalmente atendido (p90 acima de 2s).
+- Evidência anexada no repositório: resultado bruto (`results/results.jtl`) e consolidação de métricas no README.
+- Conclusão técnica documentada: critério de aceitação não foi totalmente atendido (p90 acima de 2s).
 
-Link do repositorio publico para colar no formulario:
+Link do repositório público para colar no formulário:
 
 - `https://github.com/leandro-rodini/blazedemo-performance-test`
 
 ## 1. Objetivo
 
-Validar o criterio de aceitacao:
+Validar o critério de aceitação:
 
-- Vazao alvo: 250 requisicoes por segundo (RPS)
-- Latencia alvo: percentil 90 (p90) menor que 2 segundos
+- Vazão alvo: 250 requisições por segundo (RPS)
+- Latência alvo: percentil 90 (p90) menor que 2 segundos
 
-Cenario testado:
+Cenário testado:
 
-- Compra de passagem aerea com sucesso
+- Compra de passagem aérea com sucesso
 
 ## 2. Stack e Ferramentas
 
 - Apache JMeter 5.6.3
 - Java 11+
-- GitHub Actions para execucao automatizada
-- GitHub Pages para publicacao do dashboard HTML
+- GitHub Actions para execução automatizada
+- GitHub Pages para publicação do dashboard HTML
 
-## 3. Estrutura de Projeto (Padrao de Mercado)
+## 3. Estrutura de Projeto (Padrão de Mercado)
 
 ```text
 .
@@ -50,27 +57,29 @@ Cenario testado:
 |   |-- check-threshold.sh
 |   `-- check-threshold.ps1
 |-- results/
-|   `-- results.jtl                 # gerado na execucao
+|   `-- results.jtl                 # gerado na execução
 |-- .github/workflows/
 |   `-- performance.yml
 `-- docs/
-	`-- flow.md
+    |-- diagrams/
+    |   `-- fluxo gitlab actions.gif
+    `-- flow.md
 ```
 
-## 4. Arquitetura de Execucao
+## 4. Arquitetura de Execução
 
-![Fluxo GitHub Actions](fluxo%20gitlab%20actions.gif)
+![Fluxo GitHub Actions](docs/diagrams/fluxo%20gitlab%20actions.gif)
 
-## 5. Estrategia de Testes
+## 5. Estratégia de Testes
 
-O projeto disponibiliza duas formas de execucao, conforme solicitado no enunciado:
+O projeto disponibiliza duas formas de execução, conforme solicitado no enunciado:
 
 - `BlazeDemo_Load.jmx`: somente carga sustentada
 - `BlazeDemo_Spike.jmx`: somente pico
 
-Os cenarios usam `CSV Data Set Config` com `data/cities.csv` e tambem propriedades por ambiente (`env/*.properties`) para host/protocolo.
+Os cenários usam `CSV Data Set Config` com `data/cities.csv` e também propriedades por ambiente (`env/*.properties`) para host/protocolo.
 
-Ambos usam `Precise Throughput Timer` para controle de vazao e validam sucesso funcional com assertion de texto:
+Ambos usam `Precise Throughput Timer` para controle de vazão e validam sucesso funcional com assertion de texto:
 
 - `Thank you for your purchase today!`
 
@@ -91,70 +100,70 @@ Detalhamento visual em `docs/flow.md`.
 - Java 11+ instalado e configurado
 - JMeter 5.6.3 no PATH
 
-### 7.2 Execucao Linux/macOS
+### 7.2 Execução Linux/macOS
 
 ```bash
 ./scripts/run.sh dev load
 ```
 
-Para validar threshold local no final da execucao:
+Para validar threshold local no final da execução:
 
 ```bash
 ./scripts/run.sh dev load true
 ```
 
-### 7.3 Execucao Windows (PowerShell)
+### 7.3 Execução Windows (PowerShell)
 
 ```powershell
 ./scripts/run.ps1 -Environment dev -Scenario load
 ```
 
-Para validar threshold local no final da execucao:
+Para validar threshold local no final da execução:
 
 ```powershell
 ./scripts/run.ps1 -Environment dev -Scenario spike -EvaluateThreshold
 ```
 
-## 8. Resultado da Execucao (evidencia atual)
+## 8. Resultado da Execução (evidência atual)
 
 - Throughput total: 252.53 req/s
 - p90 total: 2.723 s
 - Erro total: 0.216%
 - Samples totais: 155409
 
-## 9. Conclusao Tecnica
+## 9. Conclusão Técnica
 
-O criterio de aceitacao nao foi totalmente atendido.
+O critério de aceitação não foi totalmente atendido.
 
-- Atendido: vazao >= 250 RPS
-- Nao atendido: p90 < 2 s (resultado observado: 2.723 s)
+- Atendido: vazão >= 250 RPS
+- Não atendido: p90 < 2 s (resultado observado: 2.723 s)
 
-Analise:
+Análise:
 
-- O sistema sustenta a taxa de requisicoes, mas com degradacao de latencia no percentil alto.
-- Ha presenca de cauda longa (maximo acima de 11 s), sugerindo filas/transientes sob carga.
-- Para reprovacao formal, bastou o p90 acima do limite definido.
+- O sistema sustenta a taxa de requisições, mas com degradação de latência no percentil alto.
+- Há presença de cauda longa (máximo acima de 11 s), sugerindo filas/transientes sob carga.
+- Para reprovação formal, bastou o p90 acima do limite definido.
 
 ## 10. GitHub Actions (CI/CD de Testes)
 
 Pipeline em `.github/workflows/performance.yml`:
 
-- Executa matriz de cenarios (`load` e `spike`) em modo headless via `scripts/run.sh`
-- Publica artefatos por cenario (`jmeter-report-load` e `jmeter-report-spike`)
-- Gera quadro comparativo no `Step Summary` com throughput, p90, erro e status por cenario
-- Falha os jobs de cenario quando os criterios nao forem atendidos
-- Publica dashboards HTML no GitHub Pages para os dois cenarios (`load` e `spike`)
+- Executa matriz de cenários (`load` e `spike`) em modo headless via `scripts/run.sh`
+- Publica artefatos por cenário (`jmeter-report-load` e `jmeter-report-spike`)
+- Gera quadro comparativo no `Step Summary` com throughput, p90, erro e status por cenário
+- Falha os jobs de cenário quando os critérios não forem atendidos
+- Publica dashboards HTML no GitHub Pages para os dois cenários (`load` e `spike`)
 
 ## 11. GitHub Pages
 
-Configuracao inicial (uma unica vez):
+Configuração inicial (uma única vez):
 
-1. Acesse `Settings > Pages` no repositorio.
+1. Acesse `Settings > Pages` no repositório.
 2. Em `Build and deployment`, selecione `Source: GitHub Actions`.
 3. Execute o workflow `Performance Test` manualmente em `Actions` ou realize push na branch principal.
-4. Aguarde a conclusao dos jobs de Pages.
+4. Aguarde a conclusão dos jobs de Pages.
 
-Depois da primeira publicacao, o relatorio fica disponivel em:
+Depois da primeira publicação, o relatório fica disponível em:
 
 - `https://leandro-rodini.github.io/blazedemo-performance-test/`
 
